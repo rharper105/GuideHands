@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { UploadCloud, MessageSquare, Send, X, AlertTriangle, CheckCircle2, MousePointer2, Keyboard, ArrowDownUp, MousePointerClick, Loader2 } from 'lucide-react';
+import { UploadCloud, MessageSquare, Send, X, AlertTriangle, CheckCircle2, MousePointer2, Keyboard, ArrowDownUp, MousePointerClick, Loader2, Monitor } from 'lucide-react';
 import { AnalysisResponse, Action } from '@/lib/schema';
 
 export default function Home() {
@@ -57,6 +57,51 @@ export default function Home() {
     setIsDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const captureScreen = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        throw new Error('Screen capture is not supported in this browser.');
+      }
+      // Request video stream
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+
+      const video = document.createElement('video');
+      video.autoplay = true;
+      video.muted = true;
+      video.srcObject = stream;
+
+      // Wait for it to be ready
+      await new Promise((resolve) => {
+        video.onloadedmetadata = () => resolve(null);
+      });
+
+      // Small delay to ensure the frame renders correctly
+      await new Promise(r => setTimeout(r, 150));
+
+      // Draw the frame to a canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert and set
+      const dataUrl = canvas.toDataURL('image/png');
+      setImage(dataUrl);
+      setResult(null);
+      setError(null);
+
+      // Immediately stop all tracks to protect privacy and end capture
+      stream.getTracks().forEach(track => track.stop());
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError') {
+        setError('Screen capture was denied.');
+      } else {
+        setError(err.message || 'Screen capture failed.');
+      }
     }
   };
 
@@ -122,6 +167,14 @@ export default function Home() {
             <p style={{ color: 'var(--muted)', marginTop: '0.5rem' }}>
               Drag an image, click to browse, or use Cmd+V to paste your screen context.
             </p>
+            <button
+              className="btn-primary"
+              onClick={(e) => { e.stopPropagation(); captureScreen(); }}
+              style={{ marginTop: '1.5rem', marginLeft: 'auto', marginRight: 'auto', background: 'var(--card)', color: 'var(--foreground)', border: '1px solid var(--border)' }}
+            >
+              <Monitor size={18} />
+              Capture Current Page
+            </button>
             <input
               type="file"
               accept="image/*"
