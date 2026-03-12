@@ -6,7 +6,7 @@ const ai = new GoogleGenAI({});
 
 export async function POST(req: Request) {
     try {
-        const { image, prompt } = await req.json();
+        const { image, prompt, url, previousContext } = await req.json();
 
         if (!image) {
             return NextResponse.json(
@@ -17,6 +17,27 @@ export async function POST(req: Request) {
 
         // Strip the data:image prefix if present, the SDK expects raw base64
         const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+
+        // Construct the context-aware prompt
+        let contextText = `You are GuideHands, a visual co-pilot designed to help users navigate complex digital interfaces, such as government portals, accessible systems, or complex applications.\n`;
+
+        if (url) {
+            contextText += `The user is currently on this URL: ${url}. Use this only as supporting context; the visible screen is the primary source of truth.\n`;
+        }
+
+        if (previousContext) {
+            contextText += `Previous step context and user feedback: ${previousContext}\n`;
+        }
+
+        contextText += `The user is looking at this screen and their request is: "${prompt}".
+
+Analyze the screen carefully and perform the following:
+1. Explain what this page is in plain, accessible language.
+2. Identify the likely next step to help the user achieve their goal.
+3. If you are uncertain about a step, flag it clearly as a warning.
+4. Provide structured, precise UI navigation actions only.
+5. EXTREMELY IMPORTANT: You are a UI navigator. Do NOT make medical, legal, or official claims decisions. Do not evaluate eligibility. Only describe how to operate the interface.
+6. Do not hallucinate hidden UI elements.`;
 
         const responseSchema: Schema = {
             type: Type.OBJECT,
@@ -96,7 +117,7 @@ export async function POST(req: Request) {
                     role: 'user',
                     parts: [
                         { inlineData: { mimeType: 'image/png', data: base64Data } },
-                        { text: `The user needs help navigating this UI. Their request is: "${prompt}". Analyze the screen carefully, do not hallucinate hidden UI elements, and recommend safe actions to achieve their goal.` }
+                        { text: contextText }
                     ]
                 }
             ],

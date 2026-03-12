@@ -1,14 +1,19 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { UploadCloud, MessageSquare, Send, X, AlertTriangle, CheckCircle2, MousePointer2, Keyboard, ArrowDownUp, MousePointerClick, Loader2, Monitor } from 'lucide-react';
+import { UploadCloud, MessageSquare, Send, X, AlertTriangle, CheckCircle2, MousePointer2, Keyboard, ArrowDownUp, MousePointerClick, Loader2, Monitor, Link as LinkIcon, ChevronDown, ChevronUp, RefreshCw, CheckCircle, XCircle, Mic, MicOff } from 'lucide-react';
 import { AnalysisResponse, Action } from '@/lib/schema';
 
 export default function Home() {
   const [prompt, setPrompt] = useState('');
+  const [url, setUrl] = useState('');
+  const [previousContext, setPreviousContext] = useState<string | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+
   const [image, setImage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [result, setResult] = useState<AnalysisResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<'checking' | 'ok' | 'error'>('checking');
@@ -48,6 +53,7 @@ export default function Home() {
     reader.onload = (e) => {
       setImage(e.target?.result as string);
       setResult(null); // Clear previous results
+      setShowDetails(false);
     };
     reader.readAsDataURL(file);
   };
@@ -93,6 +99,7 @@ export default function Home() {
       setImage(dataUrl);
       setResult(null);
       setError(null);
+      setShowDetails(false);
 
       // Immediately stop all tracks to protect privacy and end capture
       stream.getTracks().forEach(track => track.stop());
@@ -119,7 +126,12 @@ export default function Home() {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image, prompt: prompt || 'What should I do on this screen?' })
+        body: JSON.stringify({
+          image,
+          prompt: prompt || 'What should I do on this screen?',
+          url,
+          previousContext
+        })
       });
 
       const data = await res.json();
@@ -133,7 +145,36 @@ export default function Home() {
       setError(err.message || 'An unexpected error occurred.');
     } finally {
       setIsAnalyzing(false);
+      // Clear previous context only after a successful new analysis, 
+      // or keep it to allow chaining. We'll keep it so it compounds,
+      // but the user logic dictates we set it explicitly via the Wizard buttons.
+      setPreviousContext(null);
     }
+  };
+
+  const handleStepDone = () => {
+    setPreviousContext(`User explicitly completed the previous step: "${result?.recommended_next_step}". Generating the next logical phase of their workflow.`);
+    setImage(null);
+    setResult(null);
+    setShowDetails(false);
+  };
+
+  const handleStepFailed = () => {
+    setPreviousContext(`User indicated that the previous step failed or couldn't be found: "${result?.recommended_next_step}". Provide an alternative approach or analyze what went wrong based on the new screen context.`);
+    setImage(null);
+    setResult(null);
+    setShowDetails(false);
+  };
+
+  const handleExplainSimpler = () => {
+    setPreviousContext(`User requested a much simpler explanation of the last recommendation: "${result?.recommended_next_step}". Keep the explanation extremely simple, step-by-step, and beginner-friendly.`);
+    analyzeScreen();
+  };
+
+  const handleCaptureAgain = () => {
+    setResult(null);
+    setShowDetails(false);
+    captureScreen();
   };
 
   const getActionIcon = (type: string) => {
@@ -146,12 +187,78 @@ export default function Home() {
     }
   };
 
+  const toggleDictation = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setError('Voice dictation is not supported in this browser.');
+      return;
+    }
+
+    if (isListening) {
+      // If already listening, we just want to stop (the onend handler will catch it)
+      // but there's no direct way to stop a specific instance if we didn't save it to state.
+      // Easiest approach for a simple toggle is just to let the user know they can't interrupt it manually here 
+      // or we store the recognition instance in a ref. Let's use a ref.
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setError(null);
+    };
+
+    recognition.onresult = (event: any) => {
+      const speechResult = event.results[0][0].transcript;
+      setPrompt((prev) => (prev ? prev + ' ' + speechResult : speechResult));
+    };
+
+    recognition.onerror = (event: any) => {
+      if (event.error === 'not-allowed') {
+        setError('Microphone access was denied.');
+      } else if (event.error !== 'no-speech') {
+        setError(`Microphone error: ${event.error}`);
+      }
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    try {
+      recognition.start();
+    } catch (err: any) {
+      setError('Could not start microphone.');
+      setIsListening(false);
+    }
+  };
+
+  const actionBtnStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    background: 'var(--card-hover)',
+    color: 'var(--foreground)',
+    border: '1px solid var(--border)',
+    padding: '0.5rem 1rem',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '0.875rem',
+    transition: 'all 0.2s ease'
+  };
+
   return (
     <div className="animate-fade-in dashboard-layout">
       <div className="left-panel">
         <header className="header" style={{ textAlign: 'left' }}>
           <h1>GuideHands</h1>
-          <p>Your visual co-pilot for navigating digital interfaces.</p>
+          <p>Your visual co-pilot for navigating complex digital interfaces and portals.</p>
         </header>
 
         {!image ? (
@@ -192,23 +299,43 @@ export default function Home() {
           </div>
         )}
 
-        <section className="input-area" style={{ marginTop: 'auto' }}>
-          <MessageSquare color="var(--muted)" />
-          <input
-            type="text"
-            placeholder="What are you trying to accomplish?"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && analyzeScreen()}
-          />
-          <button
-            className="btn-primary"
-            disabled={!image || isAnalyzing}
-            onClick={analyzeScreen}
-          >
-            {isAnalyzing ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
-            <span>Analyze</span>
-          </button>
+        <section className="input-group" style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div className="input-area" style={{ marginTop: 0 }}>
+            <LinkIcon color="var(--muted)" size={18} />
+            <input
+              type="text"
+              placeholder="Page URL (optional context)"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
+          </div>
+          <div className="input-area" style={{ marginTop: 0 }}>
+            <MessageSquare color="var(--muted)" />
+            <input
+              type="text"
+              placeholder="What are you trying to accomplish? (e.g., How do I submit this disability claim?)"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && analyzeScreen()}
+            />
+            <button
+              className="btn-primary"
+              disabled={isListening}
+              onClick={toggleDictation}
+              style={{ background: isListening ? 'rgba(239, 68, 68, 0.2)' : 'transparent', color: isListening ? 'var(--danger)' : 'var(--muted)', padding: '0.5rem', flexShrink: 0 }}
+              title="Dictate goal via microphone"
+            >
+              {isListening ? <MicOff size={20} className="spin" style={{ animation: 'pulse 1.5s infinite' }} /> : <Mic size={20} />}
+            </button>
+            <button
+              className="btn-primary"
+              disabled={!image || isAnalyzing}
+              onClick={analyzeScreen}
+            >
+              {isAnalyzing ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
+              <span>Analyze</span>
+            </button>
+          </div>
         </section>
 
         {error && (
@@ -263,25 +390,50 @@ export default function Home() {
               </div>
             )}
 
-            <div className="actions-list">
-              <h3>Execution Steps</h3>
-              {result.actions.map((action, i) => (
-                <div key={i} className="action-step">
-                  <div className="action-icon-wrapper">
-                    {getActionIcon(action.type)}
-                  </div>
-                  <div className="action-details">
-                    <h4>
-                      <span className="action-type">{action.type.toUpperCase()}</span>
-                      {action.target}
-                    </h4>
-                    <p>{action.reason}</p>
-                    {action.text && <div className="action-meta">Type: <code>"{action.text}"</code></div>}
-                    {action.direction && <div className="action-meta">Scroll: <strong>{action.direction}</strong></div>}
-                  </div>
-                </div>
-              ))}
+            <div className="guided-flow-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '1rem' }}>
+              <button className="btn-secondary" onClick={handleStepDone} style={actionBtnStyle}>
+                <CheckCircle size={16} color="var(--accent)" />
+                I did this
+              </button>
+              <button className="btn-secondary" onClick={handleStepFailed} style={actionBtnStyle}>
+                <XCircle size={16} color="var(--danger)" />
+                That didn't work
+              </button>
+              <button className="btn-secondary" onClick={handleExplainSimpler} style={actionBtnStyle}>
+                <MessageSquare size={16} />
+                Explain more simply
+              </button>
+              <button className="btn-secondary" onClick={() => setShowDetails(!showDetails)} style={actionBtnStyle}>
+                {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                Show detailed steps
+              </button>
+              <button className="btn-secondary" onClick={handleCaptureAgain} style={actionBtnStyle}>
+                <Monitor size={16} />
+                Capture current page again
+              </button>
             </div>
+
+            {showDetails && (
+              <div className="actions-list animate-fade-in" style={{ marginTop: '1.5rem' }}>
+                <h3>Execution Steps</h3>
+                {result.actions.map((action, i) => (
+                  <div key={i} className="action-step">
+                    <div className="action-icon-wrapper">
+                      {getActionIcon(action.type)}
+                    </div>
+                    <div className="action-details">
+                      <h4>
+                        <span className="action-type">{action.type.toUpperCase()}</span>
+                        {action.target}
+                      </h4>
+                      <p>{action.reason}</p>
+                      {action.text && <div className="action-meta">Type: <code>"{action.text}"</code></div>}
+                      {action.direction && <div className="action-meta">Scroll: <strong>{action.direction}</strong></div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div className="empty-state">
