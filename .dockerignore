@@ -1,0 +1,9 @@
+# syntax=docker/dockerfile:1.4
+.next
+node_modules
+.git
+.env*
+npm-debug.log
+README.md
+Dockerfile
+.dockerignore

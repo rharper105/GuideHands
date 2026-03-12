@@ -1,66 +1,245 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { UploadCloud, MessageSquare, Send, X, AlertTriangle, CheckCircle2, MousePointer2, Keyboard, ArrowDownUp, MousePointerClick, Loader2 } from 'lucide-react';
+import { AnalysisResponse, Action } from '@/lib/schema';
 
 export default function Home() {
+  const [prompt, setPrompt] = useState('');
+  const [image, setImage] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [result, setResult] = useState<AnalysisResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [health, setHealth] = useState<'checking' | 'ok' | 'error'>('checking');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check backend health on load
+  useEffect(() => {
+    fetch('/api/analyze')
+      .then(res => res.ok ? setHealth('ok') : setHealth('error'))
+      .catch(() => setHealth('error'));
+  }, []);
+
+  // Handle paste events globally
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const blob = items[i].getAsFile();
+          if (blob) handleFile(blob);
+          break;
+        }
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
+
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload a valid image file.');
+      return;
+    }
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImage(e.target?.result as string);
+      setResult(null); // Clear previous results
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const analyzeScreen = async () => {
+    if (!image) {
+      setError('Please add a screenshot first.');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image, prompt: prompt || 'What should I do on this screen?' })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to analyze screen');
+      }
+
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const getActionIcon = (type: string) => {
+    switch (type) {
+      case 'click': return <MousePointerClick className="action-icon click" />;
+      case 'type': return <Keyboard className="action-icon type" />;
+      case 'scroll': return <ArrowDownUp className="action-icon scroll" />;
+      case 'select': return <MousePointer2 className="action-icon select" />;
+      default: return <CheckCircle2 className="action-icon default" />;
+    }
+  };
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="animate-fade-in dashboard-layout">
+      <div className="left-panel">
+        <header className="header" style={{ textAlign: 'left' }}>
+          <h1>GuideHands</h1>
+          <p>Your visual co-pilot for navigating digital interfaces.</p>
+        </header>
+
+        {!image ? (
+          <section
+            className={`upload-zone ${isDragOver ? 'drag-over' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
           >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            <UploadCloud size={48} color="var(--primary)" style={{ margin: '0 auto 1rem auto' }} />
+            <h2>Upload or Paste Screenshot</h2>
+            <p style={{ color: 'var(--muted)', marginTop: '0.5rem' }}>
+              Drag an image, click to browse, or use Cmd+V to paste your screen context.
+            </p>
+            <input
+              type="file"
+              accept="image/*"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
             />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          </section>
+        ) : (
+          <div className="image-preview-container">
+            <button className="remove-image" onClick={() => { setImage(null); setResult(null); }}>
+              <X size={20} />
+            </button>
+            <img src={image} alt="Target UI" className="image-preview" />
+          </div>
+        )}
+
+        <section className="input-area" style={{ marginTop: 'auto' }}>
+          <MessageSquare color="var(--muted)" />
+          <input
+            type="text"
+            placeholder="What are you trying to accomplish?"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && analyzeScreen()}
+          />
+          <button
+            className="btn-primary"
+            disabled={!image || isAnalyzing}
+            onClick={analyzeScreen}
           >
-            Documentation
-          </a>
+            {isAnalyzing ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
+            <span>Analyze</span>
+          </button>
+        </section>
+
+        {error && (
+          <div className="error-card">
+            <AlertTriangle size={20} />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--muted)' }}>
+          <div style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: health === 'ok' ? 'var(--accent)' : health === 'error' ? 'var(--danger)' : 'var(--warning)'
+          }} />
+          {health === 'ok' ? 'Backend Connected' : health === 'error' ? 'Backend Disconnected' : 'Checking Backend...'}
         </div>
-      </main>
+      </div>
+
+      <div className="right-panel">
+        {isAnalyzing ? (
+          <div className="loading-state">
+            <Loader2 size={48} className="spin primary-color" />
+            <h3>Analyzing Interface...</h3>
+            <p>GuideHands is scanning the UI and interpreting your request.</p>
+          </div>
+        ) : result ? (
+          <div className="results-container animate-fade-in">
+            <div className="result-card highlight-card">
+              <div className="card-header">
+                <h3>Recommended Next Step</h3>
+                <span className="confidence-badge">{result.confidence}% Confident</span>
+              </div>
+              <p className="big-text">{result.recommended_next_step}</p>
+            </div>
+
+            <div className="result-card">
+              <h3>Screen Context</h3>
+              <p><strong>Goal:</strong> {result.user_goal}</p>
+              <p style={{ marginTop: '0.5rem', color: 'var(--muted)' }}>{result.screen_summary}</p>
+            </div>
+
+            {result.warnings && result.warnings.length > 0 && (
+              <div className="warnings-container">
+                {result.warnings.map((w, i) => (
+                  <div key={i} className="warning-item">
+                    <AlertTriangle size={16} />
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="actions-list">
+              <h3>Execution Steps</h3>
+              {result.actions.map((action, i) => (
+                <div key={i} className="action-step">
+                  <div className="action-icon-wrapper">
+                    {getActionIcon(action.type)}
+                  </div>
+                  <div className="action-details">
+                    <h4>
+                      <span className="action-type">{action.type.toUpperCase()}</span>
+                      {action.target}
+                    </h4>
+                    <p>{action.reason}</p>
+                    {action.text && <div className="action-meta">Type: <code>"{action.text}"</code></div>}
+                    {action.direction && <div className="action-meta">Scroll: <strong>{action.direction}</strong></div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="empty-state">
+            <div className="empty-icon-shield">
+              <UploadCloud size={32} />
+            </div>
+            <h3>Awaiting Context</h3>
+            <p>Upload a screenshot and ask a question to see GuideHands in action.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
