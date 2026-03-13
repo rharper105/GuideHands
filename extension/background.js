@@ -79,4 +79,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         return true;
     }
+
+    if (message.type === 'HIGHLIGHT_ELEMENT' || message.type === 'CLEAR_HIGHLIGHTS') {
+        (async () => {
+            try {
+                const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (!tabs[0]?.id) {
+                    sendResponse({ success: false, reason: 'No active tab' });
+                    return;
+                }
+                const response = await injectAndSend(tabs[0].id, message);
+                sendResponse(response);
+            } catch (err) {
+                sendResponse({ success: false, reason: err.message });
+            }
+        })();
+        return true;
+    }
 });

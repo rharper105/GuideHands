@@ -40,6 +40,8 @@ const btnDone = document.getElementById('btnDone');
 const btnFailed = document.getElementById('btnFailed');
 const btnExplain = document.getElementById('btnExplain');
 const btnRefreshContext = document.getElementById('btnRefreshContext');
+const btnShowMe = document.getElementById('btnShowMe');
+const btnClearHighlights = document.getElementById('btnClearHighlights');
 
 const contextDebug = document.getElementById('contextDebug');
 const contextOutput = document.getElementById('contextOutput');
@@ -441,6 +443,61 @@ errorRefresh.addEventListener('click', async () => {
     if (ctx) transitionTo('idle');
 });
 errorStartOver.addEventListener('click', startOver);
+
+// ── Visual Guidance ────────────────────────────────────────────
+function sendHighlightMessage(message) {
+    return new Promise((resolve) => {
+        chrome.runtime.sendMessage(message, (response) => {
+            if (chrome.runtime.lastError) {
+                resolve({ success: false, reason: chrome.runtime.lastError.message });
+            } else {
+                resolve(response || { success: false, reason: 'No response' });
+            }
+        });
+    });
+}
+
+async function showMeHighlight() {
+    const result = session.lastResult;
+    if (!result) {
+        showStatus('No analysis result to highlight.', 'error');
+        return;
+    }
+
+    if ((result.confidence || 0) < 50) {
+        showStatus('Confidence too low to highlight reliably. Follow the text guidance above.', 'error');
+        return;
+    }
+
+    // Find the best target description from the result
+    let target = null;
+    if (result.actions && result.actions.length > 0) {
+        target = result.actions[0].target;
+    }
+    if (!target) {
+        target = result.recommended_next_step;
+    }
+
+    showStatus('Looking for the element on the page...', 'loading');
+    const resp = await sendHighlightMessage({
+        type: 'HIGHLIGHT_ELEMENT',
+        target: target,
+        label: 'Next step'
+    });
+
+    if (resp.success) {
+        hideStatus();
+    } else {
+        showStatus(resp.reason || 'Could not find that element on the page. Follow the text guidance above.', 'error');
+    }
+}
+
+async function clearPageHighlights() {
+    await sendHighlightMessage({ type: 'CLEAR_HIGHLIGHTS' });
+}
+
+btnShowMe.addEventListener('click', showMeHighlight);
+btnClearHighlights.addEventListener('click', clearPageHighlights);
 
 // ── Init ───────────────────────────────────────────────────────
 checkHealth();

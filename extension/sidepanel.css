@@ -262,6 +262,18 @@ body {
     border-color: var(--primary);
 }
 
+.btn-showme {
+    background: var(--primary-glow);
+    border-color: var(--primary);
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.btn-showme:hover {
+    background: var(--primary);
+    color: white;
+}
+
 /* Detail Toggle */
 .detail-toggle {
     margin-top: 4px;
