@@ -6,23 +6,56 @@ const ai = new GoogleGenAI({});
 
 export async function POST(req: Request) {
     try {
-        const { image, prompt, url, previousContext } = await req.json();
+        const { image, images, prompt, url, previousContext, pageContext } = await req.json();
 
-        if (!image) {
+        // Support array of images (walkthrough) or single image (legacy/fast capture)
+        const imageArray = images || (image ? [image] : []);
+
+        // Must have at least images or page context
+        if (imageArray.length === 0 && !pageContext) {
             return NextResponse.json(
-                { error: 'Image is required for analysis' },
+                { error: 'At least one image frame or page context is required' },
                 { status: 400 }
             );
         }
 
-        // Strip the data:image prefix if present, the SDK expects raw base64
-        const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+        const imageParts = imageArray.map((img: string) => {
+            const base64Data = img.replace(/^data:image\/\w+;base64,/, '');
+            const mimeType = img.startsWith('data:image/jpeg') ? 'image/jpeg' : 'image/png';
+            return { inlineData: { mimeType, data: base64Data } };
+        });
 
         // Construct the context-aware prompt
         let contextText = `You are GuideHands, a visual co-pilot designed to help users navigate complex digital interfaces, such as government portals, accessible systems, or complex applications.\n`;
 
-        if (url) {
-            contextText += `The user is currently on this URL: ${url}. Use this only as supporting context; the visible screen is the primary source of truth.\n`;
+        const effectiveUrl = url || pageContext?.url;
+        if (effectiveUrl) {
+            contextText += `The user is currently on this URL: ${effectiveUrl}. Use this only as supporting context; the visible content is the primary source of truth.\n`;
+        }
+
+        // Include structured page context from the extension
+        if (pageContext) {
+            contextText += `\nStructured page context extracted from the DOM:\n`;
+            if (pageContext.title) contextText += `Page title: "${pageContext.title}"\n`;
+            if (pageContext.headings?.length) {
+                contextText += `Headings: ${pageContext.headings.map((h: any) => `[${h.level}] ${h.text}`).join('; ')}\n`;
+            }
+            if (pageContext.buttons?.length) {
+                contextText += `Buttons: ${pageContext.buttons.map((b: any) => b.text + (b.disabled ? ' (disabled)' : '')).join(', ')}\n`;
+            }
+            if (pageContext.links?.length) {
+                contextText += `Links: ${pageContext.links.slice(0, 20).map((l: any) => l.text).join(', ')}\n`;
+            }
+            if (pageContext.formFields?.length) {
+                contextText += `Form fields: ${pageContext.formFields.map((f: any) => `[${f.type}] ${f.label}${f.required ? ' (required)' : ''}`).join(', ')}\n`;
+            }
+            if (pageContext.visibleText) {
+                contextText += `Visible page text (excerpt): "${pageContext.visibleText.substring(0, 800)}"\n`;
+            }
+        }
+
+        if (imageArray.length > 1) {
+            contextText += `NOTE: The user has provided a sequence of ${imageArray.length} sequential frames from a single scrolling session. Analyze them chronologically to understand the broader structure of the page before giving your final recommendation. The latest frame is the current state.\n`;
         }
 
         if (previousContext) {
@@ -116,7 +149,7 @@ Analyze the screen carefully and perform the following:
                 {
                     role: 'user',
                     parts: [
-                        { inlineData: { mimeType: 'image/png', data: base64Data } },
+                        ...imageParts,
                         { text: contextText }
                     ]
                 }
@@ -134,7 +167,15 @@ Analyze the screen carefully and perform the following:
         }
 
         const parsedResult = JSON.parse(resultText);
-        return NextResponse.json(parsedResult);
+
+        // Add CORS headers for extension
+        return NextResponse.json(parsedResult, {
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type',
+            }
+        });
 
     } catch (error) {
         console.error("Analysis Error:", error);
@@ -146,5 +187,23 @@ Analyze the screen carefully and perform the following:
 }
 
 export async function GET() {
-    return NextResponse.json({ status: 'ok', service: 'GuideHands Analyze API' });
+    return NextResponse.json(
+        { status: 'ok', service: 'GuideHands Analyze API' },
+        {
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+            }
+        }
+    );
+}
+
+export async function OPTIONS() {
+    return new NextResponse(null, {
+        status: 200,
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+        },
+    });
 }

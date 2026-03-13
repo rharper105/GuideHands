@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GuideHands</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+
+<body>
+  <header class="header">
+    <h1>GuideHands</h1>
+    <p class="subtitle">Your co-pilot for navigating complex interfaces.</p>
+  </header>
+
+  <section class="input-section">
+    <div class="input-row">
+      <input type="text" id="goalInput"
+        placeholder="What are you trying to accomplish? (e.g., How do I submit this claim?)" />
+      <button id="micBtn" class="btn-mic" title="Dictate your goal">
+        🎤
+      </button>
+    </div>
+
+    <div class="button-row">
+      <button id="analyzeBtn" class="btn-primary">
+        <span class="btn-icon">🔍</span>
+        Analyze Page
+      </button>
+      <button id="screenshotBtn" class="btn-secondary" title="Include screenshot of current tab">
+        <span class="btn-icon">📸</span>
+      </button>
+      <button id="refreshBtn" class="btn-secondary" title="Refresh page context">
+        <span class="btn-icon">🔄</span>
+      </button>
+    </div>
+  </section>
+
+  <section id="statusSection" class="status-section hidden">
+    <div id="statusMessage" class="status-message"></div>
+  </section>
+
+  <!-- Awaiting next page state -->
+  <section id="awaitingSection" class="awaiting-section hidden">
+    <div class="card">
+      <h3>✅ Step Completed</h3>
+      <p id="awaitingText" class="muted">Navigate to the next page, then click Analyze to continue.</p>
+      <div class="button-row" style="margin-top: 12px;">
+        <button id="awaitingAnalyze" class="btn-primary">
+          <span class="btn-icon">🔍</span>
+          Analyze This Page
+        </button>
+        <button id="awaitingStartOver" class="btn-secondary">Start Over</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Error recovery -->
+  <section id="errorSection" class="error-section hidden">
+    <div class="card" style="border-color: var(--danger);">
+      <h3>⚠️ Could Not Read Page</h3>
+      <p id="errorText" class="muted"></p>
+      <div class="button-row" style="margin-top: 12px;">
+        <button id="errorRetry" class="btn-primary">Retry</button>
+        <button id="errorRefresh" class="btn-secondary">Refresh Context</button>
+        <button id="errorStartOver" class="btn-secondary">Start Over</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="resultSection" class="result-section hidden">
+    <!-- Recommended Next Step -->
+    <div class="card highlight-card">
+      <div class="card-header">
+        <h3>Recommended Next Step</h3>
+        <span id="confidenceBadge" class="badge"></span>
+      </div>
+      <p id="nextStep" class="big-text"></p>
+    </div>
+
+    <!-- Screen Context -->
+    <div class="card">
+      <h3>Page Context</h3>
+      <p><strong>Goal:</strong> <span id="userGoal"></span></p>
+      <p class="muted" id="screenSummary"></p>
+    </div>
+
+    <!-- Warnings -->
+    <div id="warningsContainer" class="warnings hidden"></div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+      <button class="btn-action" id="btnDone">✅ I did this</button>
+      <button class="btn-action" id="btnFailed">❌ That didn't work</button>
+      <button class="btn-action" id="btnExplain">💬 Explain more</button>
+      <button class="btn-action" id="btnRefreshContext">🔄 Refresh page</button>
+    </div>
+
+    <!-- Detailed Steps (collapsed by default) -->
+    <div class="detail-toggle">
+      <button id="toggleDetails" class="btn-link">▶ Show detailed steps</button>
+    </div>
+    <div id="detailsContainer" class="details hidden"></div>
+  </section>
+
+  <!-- Screenshot preview -->
+  <section id="screenshotSection" class="screenshot-section hidden">
+    <div class="screenshot-header">
+      <span class="muted">📸 Screenshot attached</span>
+      <button id="removeScreenshot" class="btn-link">Remove</button>
+    </div>
+    <img id="screenshotPreview" class="screenshot-preview" alt="Tab screenshot" />
+  </section>
+
+  <!-- Page Context Debug (dev only, hidden by default) -->
+  <section id="contextDebug" class="context-debug hidden">
+    <h4>Page Context (Debug)</h4>
+    <pre id="contextOutput"></pre>
+  </section>
+
+  <footer class="footer">
+    <div class="health-dot" id="healthDot"></div>
+    <span id="healthText">Checking backend...</span>
+  </footer>
+
+  <script src="sidepanel.js"></script>
+</body>
+
+</html>
