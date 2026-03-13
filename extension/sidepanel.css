@@ -138,6 +138,25 @@ body {
     font-size: 1rem;
 }
 
+/* Tools Row (secondary actions like screenshot) */
+.tools-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 2px;
+}
+
+.tools-row .btn-link {
+    font-size: 0.75rem;
+    color: var(--muted);
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.tools-row .btn-link:hover {
+    opacity: 1;
+    color: var(--foreground);
+}
+
 /* Status */
 .status-section {
     margin-bottom: 16px;

@@ -3,7 +3,7 @@
 
 // ── Configuration ──────────────────────────────────────────────
 const BACKEND_URL = 'http://localhost:3000';
-const DEBUG = true;
+const DEBUG = false;
 const MAX_CONTEXT_RETRIES = 2;
 
 // ── DOM Elements ───────────────────────────────────────────────
@@ -42,6 +42,7 @@ const btnExplain = document.getElementById('btnExplain');
 const btnRefreshContext = document.getElementById('btnRefreshContext');
 const btnShowMe = document.getElementById('btnShowMe');
 const btnClearHighlights = document.getElementById('btnClearHighlights');
+const btnReadAloud = document.getElementById('btnReadAloud');
 
 const contextDebug = document.getElementById('contextDebug');
 const contextOutput = document.getElementById('contextOutput');
@@ -262,6 +263,15 @@ function hideStatus() {
     statusSection.classList.add('hidden');
 }
 
+let statusGeneration = 0;
+function showStatusWithTimeout(text, type, durationMs) {
+    showStatus(text, type);
+    const gen = ++statusGeneration;
+    setTimeout(() => {
+        if (statusGeneration === gen) hideStatus();
+    }, durationMs);
+}
+
 function sleep(ms) {
     return new Promise(r => setTimeout(r, ms));
 }
@@ -315,6 +325,11 @@ function escapeHtml(text) {
 }
 
 function startOver() {
+    if (window.speechSynthesis?.speaking) {
+        speechSynthesis.cancel();
+    }
+    if (btnReadAloud) btnReadAloud.textContent = '🔊 Read aloud';
+
     session = {
         state: 'idle',
         goal: '',
@@ -336,6 +351,12 @@ function startOver() {
 
 // ── Analyze ────────────────────────────────────────────────────
 async function analyze() {
+    // Stop any ongoing speech from previous result
+    if (window.speechSynthesis?.speaking) {
+        speechSynthesis.cancel();
+    }
+    if (btnReadAloud) btnReadAloud.textContent = '🔊 Read aloud';
+
     // Persist goal into session
     session.goal = goalInput.value.trim() || session.goal || 'What should I do on this page?';
     goalInput.value = session.goal;
@@ -388,7 +409,11 @@ async function analyze() {
 analyzeBtn.addEventListener('click', analyze);
 refreshBtn.addEventListener('click', async () => {
     const ctx = await fetchPageContextWithRetry();
-    if (!ctx) showRecoverableError('Could not read the page.');
+    if (!ctx) {
+        showRecoverableError('Could not read the page.');
+    } else {
+        showStatusWithTimeout('Page context refreshed.', 'loading', 1500);
+    }
 });
 micBtn.addEventListener('click', toggleDictation);
 screenshotBtn.addEventListener('click', takeScreenshot);
@@ -427,9 +452,9 @@ btnExplain.addEventListener('click', () => {
     analyze();
 });
 
-btnRefreshContext.addEventListener('click', async () => {
-    const ctx = await fetchPageContextWithRetry();
-    if (!ctx) showRecoverableError('Could not read the page.');
+btnRefreshContext.addEventListener('click', () => {
+    // Re-analyze with fresh page context, preserving the current goal and session
+    analyze();
 });
 
 // ── Awaiting-state Buttons ─────────────────────────────────────
@@ -465,7 +490,7 @@ async function showMeHighlight() {
     }
 
     if ((result.confidence || 0) < 50) {
-        showStatus('Confidence too low to highlight reliably. Follow the text guidance above.', 'error');
+        showStatusWithTimeout('Confidence too low to highlight reliably. Follow the text guidance above.', 'error', 3000);
         return;
     }
 
@@ -488,7 +513,7 @@ async function showMeHighlight() {
     if (resp.success) {
         hideStatus();
     } else {
-        showStatus(resp.reason || 'Could not find that element on the page. Follow the text guidance above.', 'error');
+        showStatusWithTimeout(resp.reason || 'Could not find that element on the page. Follow the text guidance above.', 'error', 3000);
     }
 }
 
@@ -498,6 +523,51 @@ async function clearPageHighlights() {
 
 btnShowMe.addEventListener('click', showMeHighlight);
 btnClearHighlights.addEventListener('click', clearPageHighlights);
+
+// ── Read Aloud ───────────────────────────────────────────────
+function readAloud() {
+    if (!window.speechSynthesis) {
+        showStatusWithTimeout('Text-to-speech is not supported in this browser.', 'error', 2000);
+        return;
+    }
+
+    // Toggle off if already speaking
+    if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+        btnReadAloud.textContent = '🔊 Read aloud';
+        return;
+    }
+
+    const result = session.lastResult;
+    if (!result) {
+        showStatusWithTimeout('No analysis result to read.', 'error', 2000);
+        return;
+    }
+
+    let textToRead = result.recommended_next_step || 'No recommendation available.';
+    if (result.screen_summary) {
+        textToRead = `Here is your next step: ${textToRead}. For context: ${result.screen_summary}`;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(textToRead);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.9;
+    utterance.pitch = 1.0;
+
+    utterance.onstart = () => {
+        btnReadAloud.textContent = '⏹️ Stop reading';
+    };
+    utterance.onend = () => {
+        btnReadAloud.textContent = '🔊 Read aloud';
+    };
+    utterance.onerror = () => {
+        btnReadAloud.textContent = '🔊 Read aloud';
+    };
+
+    speechSynthesis.speak(utterance);
+}
+
+btnReadAloud.addEventListener('click', readAloud);
 
 // ── Init ───────────────────────────────────────────────────────
 checkHealth();

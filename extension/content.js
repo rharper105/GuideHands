@@ -88,7 +88,6 @@ function injectHighlightStyles() {
       box-shadow: 0 0 20px rgba(124, 92, 252, 0.4), 0 0 40px rgba(124, 92, 252, 0.15) !important;
       border-radius: 4px !important;
       transition: outline 0.3s ease, box-shadow 0.3s ease !important;
-      position: relative !important;
       z-index: 9998 !important;
     }
     .${GH_LABEL_CLASS} {
@@ -125,6 +124,10 @@ function injectHighlightStyles() {
 function clearHighlights() {
     document.querySelectorAll(`.${GH_HIGHLIGHT_CLASS}`).forEach(el => {
         el.classList.remove(GH_HIGHLIGHT_CLASS);
+        if (el.dataset.ghOrigPosition !== undefined) {
+            el.style.position = el.dataset.ghOrigPosition;
+            delete el.dataset.ghOrigPosition;
+        }
     });
     document.querySelectorAll(`.${GH_LABEL_CLASS}`).forEach(el => el.remove());
 }
@@ -218,13 +221,15 @@ function highlightElement(targetDescription, label) {
 
     el.classList.add(GH_HIGHLIGHT_CLASS);
 
+    // Ensure z-index works and label can be positioned — override static elements
+    const computedPos = window.getComputedStyle(el).position;
+    if (computedPos === 'static') {
+        el.dataset.ghOrigPosition = el.style.position || '';
+        el.style.position = 'relative';
+    }
+
     // Add floating label
     if (label) {
-        const container = el.style.position === 'static' || !el.style.position ? el : el;
-        const origPosition = window.getComputedStyle(el).position;
-        if (origPosition === 'static') {
-            el.style.position = 'relative';
-        }
         const labelEl = document.createElement('div');
         labelEl.className = GH_LABEL_CLASS;
         labelEl.textContent = label;
