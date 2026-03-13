@@ -448,7 +448,12 @@ btnFailed.addEventListener('click', () => {
 });
 
 btnExplain.addEventListener('click', () => {
-    session.previousContext = `User requested a simpler explanation of step ${session.stepIndex}: "${session.lastRecommendation}". Keep it extremely simple and beginner-friendly.`;
+    session.previousContext = `User clicked "Explain more" for step ${session.stepIndex}: "${session.lastRecommendation}". They need MORE CONTEXT, not just a simpler restatement. Explain:
+1. What this step actually involves — define any terminology, documents, or concepts a first-time user might not recognize (e.g., what is a DD-214? what is a service-connected disability claim?).
+2. WHY this step matters — what happens if they skip it or do it wrong.
+3. WHERE to find what they need — practical tips like where to locate a document, what office to contact, or what information to have ready.
+4. Keep the recommended_next_step actionable but make the screen_summary much more detailed and educational.
+Be thorough but still beginner-friendly.`;
     analyze();
 });
 

@@ -7,10 +7,25 @@ chrome.action.onClicked.addListener((tab) => {
     chrome.sidePanel.open({ tabId: tab.id });
 });
 
-// Helper: inject content script and send message with retry
+// Helper: send message to content script, injecting first if needed
 async function injectAndSend(tabId, message, maxRetries = 3) {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
+            // First attempt: try sending directly (manifest content_scripts may already be loaded)
+            if (attempt === 0) {
+                try {
+                    const resp = await new Promise((resolve, reject) => {
+                        chrome.tabs.sendMessage(tabId, message, (r) => {
+                            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                            else resolve(r);
+                        });
+                    });
+                    return resp;
+                } catch {
+                    // Content script not ready yet — fall through to injection
+                }
+            }
+
             // Inject content script (idempotent — re-registers listener if page changed)
             await chrome.scripting.executeScript({
                 target: { tabId },
@@ -18,7 +33,7 @@ async function injectAndSend(tabId, message, maxRetries = 3) {
             });
 
             // Small delay to let the listener register
-            await new Promise(r => setTimeout(r, 100 + attempt * 200));
+            await new Promise(r => setTimeout(r, 150 + attempt * 200));
 
             // Try sending the message
             const response = await new Promise((resolve, reject) => {
