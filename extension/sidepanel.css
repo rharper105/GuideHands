@@ -53,6 +53,19 @@ body {
     margin-top: 4px;
 }
 
+/* Welcome Message */
+.welcome-message {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    background: var(--primary-glow);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    text-align: center;
+}
+
 /* Input Section */
 .input-section {
     display: flex;
@@ -117,6 +130,16 @@ body {
     transform: none;
 }
 
+/* Focus-visible for keyboard navigation */
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-action:focus-visible,
+.btn-mic:focus-visible,
+.btn-link:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
 .btn-secondary {
     display: flex;
     align-items: center;
@@ -136,25 +159,6 @@ body {
 
 .btn-icon {
     font-size: 1rem;
-}
-
-/* Tools Row (secondary actions like screenshot) */
-.tools-row {
-    display: flex;
-    gap: 12px;
-    margin-top: 2px;
-}
-
-.tools-row .btn-link {
-    font-size: 0.75rem;
-    color: var(--muted);
-    opacity: 0.7;
-    transition: opacity 0.2s;
-}
-
-.tools-row .btn-link:hover {
-    opacity: 1;
-    color: var(--foreground);
 }
 
 /* Status */
@@ -470,23 +474,3 @@ body {
     animation: pulse 1.5s infinite;
 }
 
-/* Screenshot */
-.screenshot-section {
-    margin-top: 12px;
-}
-
-.screenshot-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-}
-
-.screenshot-preview {
-    width: 100%;
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    max-height: 200px;
-    object-fit: contain;
-    background: var(--card);
-}

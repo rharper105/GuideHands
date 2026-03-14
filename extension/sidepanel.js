@@ -11,8 +11,6 @@ const goalInput = document.getElementById('goalInput');
 const analyzeBtn = document.getElementById('analyzeBtn');
 const refreshBtn = document.getElementById('refreshBtn');
 const micBtn = document.getElementById('micBtn');
-const screenshotBtn = document.getElementById('screenshotBtn');
-
 const statusSection = document.getElementById('statusSection');
 const statusMessage = document.getElementById('statusMessage');
 
@@ -49,10 +47,7 @@ const contextOutput = document.getElementById('contextOutput');
 
 const healthDot = document.getElementById('healthDot');
 const healthText = document.getElementById('healthText');
-
-const screenshotSection = document.getElementById('screenshotSection');
-const screenshotPreview = document.getElementById('screenshotPreview');
-const removeScreenshot = document.getElementById('removeScreenshot');
+const welcomeMessage = document.getElementById('welcomeMessage');
 
 // ── Session State ──────────────────────────────────────────────
 // States: idle | analyzing | result_ready | awaiting_next_page | recoverable_error
@@ -68,9 +63,10 @@ let session = {
 };
 
 let currentPageContext = null;
-let currentScreenshot = null;
 let isListening = false;
 let detailsVisible = false;
+let loadingStepTimers = [];
+let analyzeGeneration = 0;
 
 // ── State Transitions ──────────────────────────────────────────
 function transitionTo(newState) {
@@ -88,7 +84,7 @@ function transitionTo(newState) {
             break;
         case 'analyzing':
             analyzeBtn.disabled = true;
-            showStatus('Analyzing with GuideHands...', 'loading');
+            if (welcomeMessage) welcomeMessage.classList.add('hidden');
             break;
         case 'result_ready':
             analyzeBtn.disabled = false;
@@ -98,7 +94,7 @@ function transitionTo(newState) {
             analyzeBtn.disabled = false;
             awaitingSection.classList.remove('hidden');
             awaitingText.textContent =
-                `Step ${session.stepIndex} completed. Navigate to the next page, then click "Analyze This Page" to continue.`;
+                `Step ${session.stepIndex} completed. Navigate to the next page — I'll follow along automatically.`;
             break;
         case 'recoverable_error':
             analyzeBtn.disabled = false;
@@ -183,33 +179,6 @@ async function fetchPageContextWithRetry() {
     return null;
 }
 
-// ── Screenshot ─────────────────────────────────────────────────
-async function captureTabScreenshot() {
-    return new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage({ type: 'CAPTURE_TAB' }, (response) => {
-            if (chrome.runtime.lastError) {
-                reject(new Error(chrome.runtime.lastError.message));
-            } else if (response?.error) {
-                reject(new Error(response.error));
-            } else {
-                resolve(response.dataUrl);
-            }
-        });
-    });
-}
-
-async function takeScreenshot() {
-    try {
-        showStatus('Capturing tab screenshot...', 'loading');
-        currentScreenshot = await captureTabScreenshot();
-        screenshotPreview.src = currentScreenshot;
-        screenshotSection.classList.remove('hidden');
-        hideStatus();
-    } catch (err) {
-        showStatus(`Screenshot failed: ${err.message}`, 'error');
-    }
-}
-
 // ── Voice Dictation ────────────────────────────────────────────
 function toggleDictation() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -274,6 +243,27 @@ function showStatusWithTimeout(text, type, durationMs) {
 
 function sleep(ms) {
     return new Promise(r => setTimeout(r, ms));
+}
+
+function showSteppedLoading() {
+    const gen = ++analyzeGeneration;
+    loadingStepTimers.forEach(t => clearTimeout(t));
+    loadingStepTimers = [];
+
+    showStatus('Reading the page...', 'loading');
+
+    loadingStepTimers.push(setTimeout(() => {
+        if (analyzeGeneration === gen) showStatus('Understanding the layout...', 'loading');
+    }, 1500));
+
+    loadingStepTimers.push(setTimeout(() => {
+        if (analyzeGeneration === gen) showStatus('Preparing your guidance...', 'loading');
+    }, 3500));
+}
+
+function cancelSteppedLoading() {
+    loadingStepTimers.forEach(t => clearTimeout(t));
+    loadingStepTimers = [];
 }
 
 function showResult(data) {
@@ -341,10 +331,7 @@ function startOver() {
         lastResult: null,
     };
     currentPageContext = null;
-    currentScreenshot = null;
     goalInput.value = '';
-    screenshotSection.classList.add('hidden');
-    screenshotPreview.src = '';
     contextDebug.classList.add('hidden');
     transitionTo('idle');
 }
@@ -362,15 +349,15 @@ async function analyze() {
     goalInput.value = session.goal;
 
     transitionTo('analyzing');
+    showSteppedLoading();
 
     // Fetch page context with retry
     const context = await fetchPageContextWithRetry();
     if (!context) {
+        cancelSteppedLoading();
         showRecoverableError('Could not read the page after multiple attempts. The page may still be loading, or it may be an internal browser page.');
         return;
     }
-
-    showStatus('Analyzing with GuideHands...', 'loading');
 
     try {
         const payload = {
@@ -379,10 +366,6 @@ async function analyze() {
             url: context.url,
             previousContext: session.previousContext
         };
-
-        if (currentScreenshot) {
-            payload.image = currentScreenshot;
-        }
 
         const res = await fetch(`${BACKEND_URL}/api/analyze`, {
             method: 'POST',
@@ -398,9 +381,11 @@ async function analyze() {
 
         session.stepIndex++;
         session.previousContext = null; // Clear chain context after successful use
+        cancelSteppedLoading();
         hideStatus();
         showResult(data);
     } catch (err) {
+        cancelSteppedLoading();
         showRecoverableError(`Analysis failed: ${err.message}`);
     }
 }
@@ -416,13 +401,6 @@ refreshBtn.addEventListener('click', async () => {
     }
 });
 micBtn.addEventListener('click', toggleDictation);
-screenshotBtn.addEventListener('click', takeScreenshot);
-
-removeScreenshot.addEventListener('click', () => {
-    currentScreenshot = null;
-    screenshotSection.classList.add('hidden');
-    screenshotPreview.src = '';
-});
 
 goalInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') analyze();
@@ -444,7 +422,7 @@ btnDone.addEventListener('click', () => {
 btnFailed.addEventListener('click', () => {
     session.previousContext = `User indicated step ${session.stepIndex} failed: "${session.lastRecommendation}". Provide an alternative approach based on fresh page context.`;
     transitionTo('awaiting_next_page');
-    awaitingText.textContent = 'Step marked as unsuccessful. Click "Analyze This Page" for an alternative approach.';
+    awaitingText.textContent = 'Step marked as unsuccessful. Navigate or click "Analyze This Page" for an alternative.';
 });
 
 btnExplain.addEventListener('click', () => {
@@ -518,7 +496,11 @@ async function showMeHighlight() {
     if (resp.success) {
         hideStatus();
     } else {
-        showStatusWithTimeout(resp.reason || 'Could not find that element on the page. Follow the text guidance above.', 'error', 3000);
+        const targetDesc = session.lastResult?.actions?.[0]?.target || session.lastResult?.recommended_next_step || '';
+        const fallbackMsg = targetDesc
+            ? `I couldn't find that element precisely. Look for: "${targetDesc.substring(0, 80)}"`
+            : 'Could not find that element on the page. Follow the text guidance above.';
+        showStatusWithTimeout(fallbackMsg, 'error', 5000);
     }
 }
 
@@ -573,6 +555,29 @@ function readAloud() {
 }
 
 btnReadAloud.addEventListener('click', readAloud);
+
+// ── Auto-navigate Detection ──────────────────────────────────
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'PAGE_NAVIGATED') {
+        handlePageNavigation(message.url);
+    }
+});
+
+function handlePageNavigation(newUrl) {
+    // In awaiting_next_page: auto-analyze immediately (guided flow continues)
+    if (session.state === 'awaiting_next_page') {
+        analyze();
+        return;
+    }
+    // In result_ready: notify user the page changed
+    if (session.state === 'result_ready') {
+        showStatusWithTimeout(
+            'Page changed — click Analyze to get guidance for this page.',
+            'loading',
+            5000
+        );
+    }
+}
 
 // ── Init ───────────────────────────────────────────────────────
 checkHealth();

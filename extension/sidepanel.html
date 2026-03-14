@@ -14,11 +14,15 @@
     <p class="subtitle">Your co-pilot for navigating complex interfaces.</p>
   </header>
 
+  <div id="welcomeMessage" class="welcome-message">
+    Tell me what you're trying to do, and I'll guide you step by step.
+  </div>
+
   <section class="input-section">
     <div class="input-row">
       <input type="text" id="goalInput"
         placeholder="What are you trying to accomplish? (e.g., How do I submit this claim?)" />
-      <button id="micBtn" class="btn-mic" title="Dictate your goal">
+      <button id="micBtn" class="btn-mic" title="Dictate your goal" aria-label="Voice input">
         🎤
       </button>
     </div>
@@ -28,18 +32,13 @@
         <span class="btn-icon">🔍</span>
         Analyze Page
       </button>
-      <button id="refreshBtn" class="btn-secondary" title="Refresh page context">
+      <button id="refreshBtn" class="btn-secondary" title="Refresh page context" aria-label="Refresh page context">
         <span class="btn-icon">🔄</span>
-      </button>
-    </div>
-    <div class="tools-row">
-      <button id="screenshotBtn" class="btn-link" title="Attach a screenshot (optional)">
-        📸 Attach screenshot
       </button>
     </div>
   </section>
 
-  <section id="statusSection" class="status-section hidden">
+  <section id="statusSection" class="status-section hidden" role="status" aria-live="polite">
     <div id="statusMessage" class="status-message"></div>
   </section>
 
@@ -59,7 +58,7 @@
   </section>
 
   <!-- Error recovery -->
-  <section id="errorSection" class="error-section hidden">
+  <section id="errorSection" class="error-section hidden" role="alert">
     <div class="card" style="border-color: var(--danger);">
       <h3>⚠️ Could Not Read Page</h3>
       <p id="errorText" class="muted"></p>
@@ -93,13 +92,13 @@
 
     <!-- Action Buttons -->
     <div class="action-buttons">
-      <button class="btn-action" id="btnDone">✅ I did this</button>
-      <button class="btn-action" id="btnFailed">❌ That didn't work</button>
-      <button class="btn-action" id="btnExplain">💬 Explain more</button>
-      <button class="btn-action" id="btnRefreshContext">🔄 Refresh page</button>
-      <button class="btn-action btn-showme" id="btnShowMe">👁️ Show me</button>
-      <button class="btn-action" id="btnClearHighlights">✖ Clear highlights</button>
-      <button class="btn-action" id="btnReadAloud">🔊 Read aloud</button>
+      <button class="btn-action" id="btnDone" aria-label="I completed this step">✅ I did this</button>
+      <button class="btn-action" id="btnFailed" aria-label="This step didn't work">❌ That didn't work</button>
+      <button class="btn-action" id="btnExplain" aria-label="Explain more about this step">💬 Explain more</button>
+      <button class="btn-action" id="btnRefreshContext" aria-label="Re-analyze the current page">🔄 Refresh page</button>
+      <button class="btn-action btn-showme" id="btnShowMe" aria-label="Highlight the element on the page">👁️ Show me</button>
+      <button class="btn-action" id="btnClearHighlights" aria-label="Clear visual highlights">✖ Clear highlights</button>
+      <button class="btn-action" id="btnReadAloud" aria-label="Read recommendation aloud">🔊 Read aloud</button>
     </div>
 
     <!-- Detailed Steps (collapsed by default) -->
@@ -107,15 +106,6 @@
       <button id="toggleDetails" class="btn-link">▶ Show detailed steps</button>
     </div>
     <div id="detailsContainer" class="details hidden"></div>
-  </section>
-
-  <!-- Screenshot preview -->
-  <section id="screenshotSection" class="screenshot-section hidden">
-    <div class="screenshot-header">
-      <span class="muted">📸 Screenshot attached</span>
-      <button id="removeScreenshot" class="btn-link">Remove</button>
-    </div>
-    <img id="screenshotPreview" class="screenshot-preview" alt="Tab screenshot" />
   </section>
 
   <!-- Page Context Debug (dev only, hidden by default) -->

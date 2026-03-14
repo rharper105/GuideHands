@@ -112,3 +112,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 });
+
+// ── Auto-detect page navigation ─────────────────────────────
+// Track last-known URL per tab to detect real navigations
+const tabUrls = new Map();
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status !== 'complete') return;
+    if (!tab.url || !(tab.url.startsWith('http://') || tab.url.startsWith('https://'))) return;
+
+    const previousUrl = tabUrls.get(tabId);
+    tabUrls.set(tabId, tab.url);
+
+    // Skip if URL hasn't actually changed (same-page reload)
+    if (previousUrl === tab.url) return;
+
+    // Notify side panel — it decides whether to act based on its state
+    chrome.runtime.sendMessage({
+        type: 'PAGE_NAVIGATED',
+        url: tab.url,
+        tabId: tabId
+    }).catch(() => {
+        // Side panel may not be open — this is expected, suppress error
+    });
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+    tabUrls.delete(tabId);
+});

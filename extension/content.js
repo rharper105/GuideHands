@@ -82,29 +82,51 @@ function injectHighlightStyles() {
     const style = document.createElement('style');
     style.id = GH_STYLE_ID;
     style.textContent = `
+    .guidehands-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.35);
+      z-index: 9997;
+      pointer-events: none;
+      animation: guidehands-fade-in 0.3s ease;
+    }
+    @keyframes guidehands-fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
     .${GH_HIGHLIGHT_CLASS} {
       outline: 3px solid #7c5cfc !important;
-      outline-offset: 3px !important;
-      box-shadow: 0 0 20px rgba(124, 92, 252, 0.4), 0 0 40px rgba(124, 92, 252, 0.15) !important;
+      outline-offset: 4px !important;
+      box-shadow: 0 0 0 6px rgba(124,92,252,0.25), 0 0 30px rgba(124,92,252,0.4) !important;
       border-radius: 4px !important;
-      transition: outline 0.3s ease, box-shadow 0.3s ease !important;
       z-index: 9998 !important;
+      position: relative;
+      animation: guidehands-pulse 0.7s ease-in-out 3 !important;
+    }
+    @keyframes guidehands-pulse {
+      0%, 100% {
+        outline-color: #7c5cfc;
+        box-shadow: 0 0 0 6px rgba(124,92,252,0.25), 0 0 30px rgba(124,92,252,0.4);
+      }
+      50% {
+        outline-color: #9b7dff;
+        box-shadow: 0 0 0 10px rgba(124,92,252,0.4), 0 0 40px rgba(124,92,252,0.6);
+      }
     }
     .${GH_LABEL_CLASS} {
-      position: absolute;
-      top: -32px;
-      left: 50%;
-      transform: translateX(-50%);
       background: #7c5cfc;
       color: white;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 600;
-      padding: 4px 12px;
+      padding: 5px 14px;
       border-radius: 6px;
       white-space: nowrap;
       z-index: 9999;
       pointer-events: none;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.4);
       font-family: system-ui, -apple-system, sans-serif;
     }
     .${GH_LABEL_CLASS}::after {
@@ -130,6 +152,7 @@ function clearHighlights() {
         }
     });
     document.querySelectorAll(`.${GH_LABEL_CLASS}`).forEach(el => el.remove());
+    document.querySelectorAll('.guidehands-backdrop').forEach(el => el.remove());
 }
 
 function findTargetElement(targetDescription) {
@@ -207,15 +230,21 @@ function findTargetElement(targetDescription) {
     }
 
     // Minimum confidence threshold
-    return bestScore >= 30 ? bestMatch : null;
+    return bestScore >= 50 ? bestMatch : null;
 }
 
 function highlightElement(targetDescription, label) {
     clearHighlights();
     injectHighlightStyles();
 
+    // Create backdrop overlay for spotlight effect
+    const backdrop = document.createElement('div');
+    backdrop.className = 'guidehands-backdrop';
+    document.body.appendChild(backdrop);
+
     const el = findTargetElement(targetDescription);
     if (!el) {
+        clearHighlights(); // Remove backdrop if element not found
         return { success: false, reason: 'Could not find the target element on the page.' };
     }
 
@@ -228,16 +257,24 @@ function highlightElement(targetDescription, label) {
         el.style.position = 'relative';
     }
 
-    // Add floating label
+    // Add floating label — use fixed positioning on body to avoid breaking inputs/textareas
     if (label) {
         const labelEl = document.createElement('div');
         labelEl.className = GH_LABEL_CLASS;
         labelEl.textContent = label;
-        el.appendChild(labelEl);
+        const rect = el.getBoundingClientRect();
+        labelEl.style.position = 'fixed';
+        labelEl.style.top = `${rect.top - 36}px`;
+        labelEl.style.left = `${rect.left + rect.width / 2}px`;
+        labelEl.style.transform = 'translateX(-50%)';
+        document.body.appendChild(labelEl);
     }
 
     // Scroll into view smoothly
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Auto-clear highlights after 8 seconds
+    setTimeout(() => clearHighlights(), 8000);
 
     return { success: true };
 }
