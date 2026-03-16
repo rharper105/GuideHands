@@ -166,7 +166,16 @@ Analyze the screen carefully and perform the following:
             throw new Error("Empty response from Gemini");
         }
 
-        const parsedResult = JSON.parse(resultText);
+        let parsedResult;
+        try {
+            parsedResult = JSON.parse(resultText);
+        } catch (parseErr) {
+            console.error("JSON Parse Error:", parseErr, "Raw:", resultText?.substring(0, 200));
+            return NextResponse.json(
+                { error: 'Invalid response from AI model' },
+                { status: 502 }
+            );
+        }
 
         // Add CORS headers for extension
         return NextResponse.json(parsedResult, {

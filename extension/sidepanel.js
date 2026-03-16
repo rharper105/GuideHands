@@ -2,7 +2,9 @@
 // Session state machine, retry-aware page context, error recovery.
 
 // ── Configuration ──────────────────────────────────────────────
-const BACKEND_URL = 'http://localhost:3000';
+// Production: Google Cloud Run backend
+// For local dev, change to: 'http://localhost:3000'
+const BACKEND_URL = 'https://guidehands-100750064324.us-central1.run.app';
 const DEBUG = false;
 const MAX_CONTEXT_RETRIES = 2;
 
@@ -359,6 +361,9 @@ async function analyze() {
         return;
     }
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
     try {
         const payload = {
             pageContext: context,
@@ -370,8 +375,10 @@ async function analyze() {
         const res = await fetch(`${BACKEND_URL}/api/analyze`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal: controller.signal
         });
+        clearTimeout(timeout);
 
         const data = await res.json();
 
@@ -385,8 +392,13 @@ async function analyze() {
         hideStatus();
         showResult(data);
     } catch (err) {
+        clearTimeout(timeout);
         cancelSteppedLoading();
-        showRecoverableError(`Analysis failed: ${err.message}`);
+        if (err.name === 'AbortError') {
+            showRecoverableError('Analysis timed out. The backend may be slow — try again.');
+        } else {
+            showRecoverableError(`Analysis failed: ${err.message}`);
+        }
     }
 }
 
